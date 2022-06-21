@@ -215,8 +215,10 @@ module Rake
 
           @already_invoked = true
 
-          invoke_prerequisites(task_args, new_chain)
-          execute(task_args) if needed?
+          if needed?
+            invoke_prerequisites(task_args, new_chain)
+            execute(task_args)
+          end
         rescue Exception => ex
           add_chain_to(ex, new_chain)
           @invocation_exception = ex

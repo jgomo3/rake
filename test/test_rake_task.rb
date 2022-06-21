@@ -92,6 +92,35 @@ class TestRakeTask < Rake::TestCase # :nodoc:
     Rake.application.options.trace = false
   end
 
+  def test_no_unnecesary_nested_invokes
+    test_no_unnecesary_nested_invokes__trace = [] # "Namespaced" array name
+
+    # Overwrite "invoke_with_call_chain" to trace the tasks being _invoked_
+    Rake::Task.alias_method :old_invoke_with_call_chain, :invoke_with_call_chain
+    Rake::Task.define_method(:invoke_with_call_chain) do |task_args, invocation_chain|
+      test_no_unnecesary_nested_invokes__trace << name
+      old_invoke_with_call_chain(task_args, invocation_chain)
+    end
+
+    # Create the dependency graph t1 -> t2 -> t3
+    t1 = task(t1: [:t2])
+    t2 = task(t2: [:t3])
+    t3 = task(:t3)
+
+    # Force t2 to be not needed
+    t2.define_singleton_method(:needed?) { false }
+    
+    t1.invoke
+
+    # Restore the original "invoke_with_call_chain" method, so other
+    # tests don't use the patched one.
+    Rake::Task.alias_method :invoke_with_call_chain, :old_invoke_with_call_chain
+    Rake::Task.remove_method :old_invoke_with_call_chain
+
+    # Because t2 was not needed, there is no need to "invoke" t3 neither.
+    refute_includes test_no_unnecesary_nested_invokes__trace, "t3"
+  end
+  
   def test_no_double_invoke
     runlist = []
     t1 = task(t1: [:t2, :t3]) { |t| runlist << t.name; 3321 }
